@@ -51,19 +51,29 @@ export class Player {
     animation: null,
   };
 
-  constructor(scene, world) {
+  constructor(scene, world, isLocal = true) {
+    this.isLocal = isLocal;
     this.world = world;
     this.position.set(32, 32, 32);
     this.cameraHelper.visible = false;
-    scene.add(this.camera);
-    scene.add(this.cameraHelper);
+    // scene.add(this.camera);
+    // scene.add(this.cameraHelper);
 
     // Hide/show instructions based on pointer controls locking/unlocking
     this.controls.addEventListener("lock", this.onCameraLock.bind(this));
     this.controls.addEventListener("unlock", this.onCameraUnlock.bind(this));
 
+    if (this.isLocal) {
+      scene.add(this.camera);
+      scene.add(this.cameraHelper);
+      this.camera.add(this.tool.container);
+    } else {
+      this.avatar = new THREE.Group();
+      scene.add(this.avatar);
+      this.avatar.add(this.tool.container);
+    }
     // The tool is parented to the camera
-    this.camera.add(this.tool.container);
+    // this.camera.add(this.tool.container);
 
     // Set raycaster to use layer 0 so it doesn't interact with water mesh on layer 1
     this.raycaster.layers.set(0);

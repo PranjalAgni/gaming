@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {io} from "socket.io-client";
+import { io } from 'socket.io-client';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { World } from './world';
@@ -9,13 +9,12 @@ import { setupUI } from './ui';
 import { ModelLoader } from './modelLoader';
 import { ToolManager } from './toolManager';
 
-
 // Create a instance of tool manager
 /** @type {ToolManager} */
 const toolManager = new ToolManager();
 
 // Socket setup
-const socket = io("http://localhost:3000");
+const socket = io('http://localhost:3000');
 
 // Track remote players
 const remotePlayers = {};
@@ -27,11 +26,11 @@ const remotePlayers = {};
 socket.on('worldState', (data) => {
   for (const playerId in data.players) {
     // don't create local player again
-    if (playerId === socket.id) continue; 
-    
+    if (playerId === socket.id) continue;
+
     // Create a remote player in your scene
-    const remotePlayer = new Player(scene, world); 
-    remotePlayer.position.set(
+    const remotePlayer = new Player(scene, world, false);
+    remotePlayer.avatar.position.set(
       data.players[playerId].x,
       data.players[playerId].y,
       data.players[playerId].z
@@ -55,11 +54,11 @@ socket.on('blockUpdated', ({ x, y, z, blockId, type }) => {
 
 // When a new player joins
 socket.on('playerJoined', ({ id, state }) => {
-  console.log("Someone joined our game = ", {id, state});
+  console.log('Someone joined our game = ', { id, state });
   if (id === socket.id) return; // ignore self
-  
-  const remotePlayer = new Player(scene, world);
-  remotePlayer.position.set(state.x, state.y, state.z);
+
+  const remotePlayer = new Player(scene, world, false);
+  remotePlayer.avatar.position.set(state.x, state.y, state.z);
 
   toolManager.subscribe((toolModel) => {
     remotePlayer.setTool(toolModel.clone());
@@ -71,7 +70,7 @@ socket.on('playerJoined', ({ id, state }) => {
 // When a remote player moves
 socket.on('playerMoved', ({ id, state }) => {
   if (!remotePlayers[id]) return;
-  remotePlayers[id].position.set(state.x, state.y, state.z);
+  remotePlayers[id].avatar.position.set(state.x, state.y, state.z);
   // Optionally update rotation, velocity, etc. if you track those
 });
 
@@ -87,21 +86,34 @@ socket.on('playerLeft', ({ id }) => {
   }
 });
 
-// Emit local player’s position each frame
+// Define a global variable to store the last synced position.
+let lastSyncedPosition = new THREE.Vector3();
+const SYNC_THRESHOLD = 0.1; // Only sync if player moved more than 0.1 units
+
 function syncLocalPlayerPosition() {
-  // For example, run this inside your animate() or physics loop
-  socket.emit('movePlayer', {
-    x: player.position.x,
-    y: player.position.y,
-    z: player.position.z
-    // Possibly send rotation, velocity...
-  });
+  // Get the current player position
+  const currentPosition = player.position;
+  
+  // Compare current position with the last synced position
+  if (currentPosition.distanceTo(lastSyncedPosition) > SYNC_THRESHOLD) {
+    // Update the stored position
+    lastSyncedPosition.copy(currentPosition);
+    
+    console.log("i am sending: ", currentPosition)
+    // Emit the new position to the server.
+    socket.emit('movePlayer', {
+      x: currentPosition.x,
+      y: currentPosition.y,
+      z: currentPosition.z,
+      // Optionally include more state: rotation, velocity, etc.
+    });
+  }
 }
 
 // Send block updates (placing or removing) to the server
 window.handleBlockUpdate = (x, y, z, blockId, type) => {
   socket.emit('blockUpdate', { x, y, z, blockId, type });
-}
+};
 
 // UI Setup
 const stats = new Stats();
@@ -128,13 +140,17 @@ const player = new Player(scene, world);
 const physics = new Physics(scene);
 
 // Camera setup
-const orbitCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const orbitCamera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 orbitCamera.position.set(24, 24, 24);
 orbitCamera.layers.enable(1);
 
 const controls = new OrbitControls(orbitCamera, renderer.domElement);
 controls.update();
-
 
 const modelsToLoad = {
   pickaxe: './models/pickaxe.glb',
@@ -145,8 +161,6 @@ const modelLoader = new ModelLoader(modelsToLoad, (models) => {
   player.setTool(models.pickaxe);
   toolManager.setToolModel(models.pickaxe);
 });
-
-
 
 let sun;
 function setupLights() {
@@ -192,14 +206,19 @@ function animate() {
     sun.position.sub(new THREE.Vector3(-50, -50, -50));
     sun.target.position.copy(player.camera.position);
 
-    // Update positon of the orbit camera to track player 
-    orbitCamera.position.copy(player.position).add(new THREE.Vector3(16, 16, 16));
+    // Update positon of the orbit camera to track player
+    orbitCamera.position
+      .copy(player.position)
+      .add(new THREE.Vector3(16, 16, 16));
     controls.target.copy(player.position);
   }
 
-  renderer.render(scene, player.controls.isLocked ? player.camera : orbitCamera);
+  renderer.render(
+    scene,
+    player.controls.isLocked ? player.camera : orbitCamera
+  );
   stats.update();
-  
+
   // Send local player's updated position
   syncLocalPlayerPosition();
 

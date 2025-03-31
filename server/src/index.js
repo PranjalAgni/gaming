@@ -27,16 +27,16 @@ io.on("connection", (socket) => {
 
   // Initialize this player's state
   players[socket.id] = {
-    x: 0,
-    y: 30,
-    z: 0,
+    x: 32,
+    y: 32,
+    z: 32,
     rotation: 0,
   };
 
   socket.emit("worldState", {
     players,
   });
-  
+
   // Tell everyone else a new player joined
   socket.broadcast.emit("playerJoined", {
     id: socket.id,
