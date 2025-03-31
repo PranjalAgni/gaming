@@ -77,3 +77,14 @@ h1 {
   font-size: 2em;
   color: white;
 }
+
+#crafting-container {
+  display: none;
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  background: black;
+  color: #fff;
+  padding: 16px;
+  z-index: 9999;
+}
